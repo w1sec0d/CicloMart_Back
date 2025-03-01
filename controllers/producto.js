@@ -214,6 +214,38 @@ const createPreference = async (req, res) => {
       });
     }
 
+    // REGISTRO DE PREFERENCIA DE MERCADOPAGO EN LA BASE DE DATOS
+
+    // Crear carrito
+    const carritoQuery = `
+      INSERT INTO carrito (idUsuario, cantidadProductos, precioTotal, fecha, estado, metodoPago, direccionEnvio, descuento)
+      VALUES (?, ?, ?, NOW(), 'pendiente_pago', ?, ?, ?)
+    `;
+    const carritoValues = [
+      idComprador,
+      cantidad,
+      producto.precio * cantidad,
+      'MercadoPago',
+      'Direccion de envio',
+      0,
+    ];
+
+    const carritoResults = await new Promise((resolve, reject) => {
+      db.query(carritoQuery, carritoValues, (error, results) => {
+        if (error) {
+          console.error('Error creando carrito:', error);
+          return reject({
+            success: false,
+            message: 'Error creando carrito',
+            error: error.message,
+          });
+        }
+        resolve(results);
+      });
+    });
+
+    const carritoId = carritoResults.insertId;
+
     // CREACION DE PREFERENCIA DE MERCADOPAGO
 
     // Configurar el cliente de MercadoPago con el access_token del vendedor
@@ -256,30 +288,29 @@ const createPreference = async (req, res) => {
         //   number: comprador.cedula,
         // }
         address: {
-          zip_code: comprador.codigoPostal,
-          street_name: comprador.direccionNombre,
-          street_number: comprador.direccionNumero,
+          zip_code: 110881,
+          street_name: "Carrera 87",
+          street_number: "48-50",
         }
       },
       payment_methods: {
         default_installments: 1,
       },
-      shipments: {
-        mode: 'me2',
-        local_pickup: false,
-        dimensions: producto.dimensiones ?? '30x30x30,500',
-        free_methods: freeShippingBody,
-        cost: Number(producto.costoEnvio),
-        reciever_address: {
-          zip_code: comprador.codigoPostal ?? '1234',
-          street_name: comprador.direccionNombre ?? 'Calle Prueba',
-          street_number: comprador.direccionNumero ?? '48 #29-20 Sur',
-          floor: comprador.dirrecionPiso ?? '3',
-          apartment: comprador.direccionApartamento ?? 'C',
-          city_name: comprador.direccionCiudad ?? 'Bogotá',
-          country_name: 'Colombia',
-        },
-      },
+      // shipments: {
+      //   mode: 'custom',
+      //   local_pickup: false,
+      //   dimensions: producto.dimensiones ?? '30 x 30 x 30, 500',
+      //   receiver_address: {
+      //     zip_code: comprador.codigoPostal ?? '110831',
+      //     street_name: comprador.direccionNombre ?? 'Carrera 12',
+      //     street_number: comprador.direccionNumero ?? '48-30',
+      //     floor: comprador.dirrecionPiso ?? '3',
+      //     apartment: comprador.direccionApartamento ?? 'C',
+      //     city_name: comprador.direccionCiudad ?? 'Bogota',
+      //     country_name: 'Colombia',
+      //     state_name: 'Bogota',
+      //   },
+      // },
       back_urls: {
         success: process.env.FRONTEND_URL + '/requestResult/purchaseComplete',
         failure: process.env.FRONTEND_URL + '/requestResult/purchaseFailed',
@@ -292,40 +323,11 @@ const createPreference = async (req, res) => {
       marketplace_fee: calculateFee(producto.tipo, producto.precio),
     };
 
+    console.log('preferenceBody', preferenceBody)
+
     const preferenceResult = await preference.create({ body: preferenceBody });
     const idPreferenciaPago = preferenceResult.id;
 
-    // REGISTRO DE PREFERENCIA DE MERCADOPAGO EN LA BASE DE DATOS
-
-    // Crear carrito
-    const carritoQuery = `
-      INSERT INTO carrito (idUsuario, cantidadProductos, precioTotal, fecha, estado, metodoPago, direccionEnvio, descuento)
-      VALUES (?, ?, ?, NOW(), 'pendiente_pago', ?, ?, ?)
-    `;
-    const carritoValues = [
-      idComprador,
-      quantity,
-      unit_price * quantity,
-      'MercadoPago',
-      'Direccion de envio',
-      0,
-    ];
-
-    const carritoResults = await new Promise((resolve, reject) => {
-      db.query(carritoQuery, carritoValues, (error, results) => {
-        if (error) {
-          console.error('Error creando carrito:', error);
-          return reject({
-            success: false,
-            message: 'Error creando carrito',
-            error: error.message,
-          });
-        }
-        resolve(results);
-      });
-    });
-
-    const carritoId = carritoResults.insertId;
     // Actualizar carrito con el id de la preferencia
     await new Promise((resolve, reject) => {
       db.query('UPDATE carrito SET idPreferenciaPago = ? WHERE idCarrito = ?', [idPreferenciaPago, carritoId], (error, results) => {
@@ -343,15 +345,14 @@ const createPreference = async (req, res) => {
 
     // Crear carritoProducto
     const carritoProductoQuery = `
-      INSERT INTO carritoProducto (idProducto, idCarrito, cantidad, precio_unitario, direccion, estadoEnvio)
-      VALUES (?, ?, ?, ?, ?, 'Pendiente')
+      INSERT INTO carritoProducto (idProducto, idCarrito, cantidad, precio_unitario, estadoEnvio)
+      VALUES (?, ?, ?, ?,'Pendiente')
     `;
     const carritoProductoValues = [
-      idProducto,
+      producto.idProducto,
       carritoId,
-      quantity,
-      unit_price,
-      'Direccion de envio',
+      cantidad,
+      producto.precio,
     ];
 
     await new Promise((resolve, reject) => {

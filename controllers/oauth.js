@@ -1,5 +1,7 @@
 const axios = require('axios');
 const db = require('../database/connection');
+require('dotenv').config();
+
 
 const oauthCallback = async (req, res) => {
     const { code, state } = req.query;
@@ -37,12 +39,9 @@ const oauthCallback = async (req, res) => {
                 }
             }
         );
-
-        res.status(200).json({
-            success: true,
-            message: 'Tokens guardados correctamente, usuario registrado como vendedor',
-            results: oauthResponse.data
-        });
+        const frontendURL = process.env.FRONTEND_URL;
+        // Redirigir a la página de notificación
+        return res.redirect(frontendURL + '/requestResult/sellerRegistrationSuccess');
 
 
     } catch (error) {

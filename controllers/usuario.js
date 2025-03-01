@@ -299,6 +299,67 @@ const updateUsuario = (request, response) => {
   }
 }
 
+const updateUsuarioDireccion = async (req, res) => {
+  const {
+    direccionNombre,
+    direccionNumero,
+    codigoPostal,
+    direccionCiudad,
+    direccionApartamento,
+    direccionPiso,
+  } = req.body
+  const idUsuario = req.params.idUsuario
+
+  try {
+    const query = `
+      UPDATE usuario
+      SET direccionNombre = ?, direccionNumero = ?, codigoPostal = ?, direccionCiudad = ?, direccionApartamento = ?, direccionPiso = ?
+      WHERE idUsuario = ?
+    `
+    const values = [
+      direccionNombre,
+      direccionNumero,
+      codigoPostal,
+      direccionCiudad,
+      direccionApartamento,
+      direccionPiso,
+      idUsuario,
+    ]
+
+    db.query(query, values, (error, results) => {
+      if (error) {
+        console.error('Error actualizando dirección:', error)
+        return res.status(500).json({
+          success: false,
+          message: 'Error actualizando dirección',
+          error: error.message,
+        })
+      }
+      console.log('results', results)
+      res.status(200).json({
+        success: true,
+        message: 'Dirección actualizada exitosamente',
+        data: {
+          direccionNombre,
+          direccionNumero,
+          codigoPostal,
+          direccionCiudad,
+          direccionApartamento,
+          direccionPiso,
+        },
+        results,
+      })
+    })
+  } catch (error) {
+    console.error('Error actualizando dirección:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Error actualizando dirección',
+      error: error.message,
+    })
+  }
+}
+
 module.exports = {
   getUsuarios,
   getUsuarioById,
@@ -306,4 +367,5 @@ module.exports = {
   registerUsuario,
   updateUsuarioFoto,
   updateUsuario,
+  updateUsuarioDireccion,
 }

@@ -86,15 +86,13 @@ CREATE TABLE `tienda` (
 
 CREATE TABLE `carrito` (
   `idCarrito` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `idPreferenciaPago` varchar(100),
-  `idPago` varchar(100),
   `idUsuario` int NOT NULL,
   `cantidadProductos` int DEFAULT 0,
   `precioTotal` float,
   `fecha` datetime,
-  `estado` ENUM ('pendiente_pago', 'pendiente_envio', 'enviado', 'recibido', 'fallido') DEFAULT 'pendiente_pago',
+  `estado` ENUM ('pendiente_pago', 'pendiente_envio', 'enviado', 'recibido', 'fallido', 'reembolsado') DEFAULT 'pendiente_pago',
   `metodoPago` varchar(45),
-  `direccionEnvio` varchar(45),
+  `direccionEnvio` varchar(255),
   `descuento` float
 );
 
@@ -611,7 +609,8 @@ SELECT
     modelo.descripcion AS descripcionModelo,
     modelo.categoria AS categoriaModelo,
     modelo.compatibilidad AS compatibilidadModelo,
-    marca.nombre AS nombreMarca
+    marca.nombre AS nombreMarca,
+    imagen.url AS imagenModelo
 FROM 
     carrito
 JOIN 
@@ -624,6 +623,8 @@ JOIN
     modelo ON producto.idModelo = modelo.idModelo
 LEFT JOIN 
     marca ON modelo.idMarca = marca.idMarca
+LEFT JOIN 
+    imagen ON modelo.idModelo = imagen.idModelo
 ORDER BY 
     carrito.fecha DESC;
 
