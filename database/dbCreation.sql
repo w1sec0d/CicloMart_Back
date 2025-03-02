@@ -30,26 +30,6 @@ CREATE TABLE `usuario` (
   `mp_public_key` varchar(100)
 );
 
-CREATE TABLE `modelo` (
-  `idModelo` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(255) NOT NULL,
-  `tipo` ENUM ('bicicleta', 'componente', 'accesorio', 'otro') NOT NULL DEFAULT 'bicicleta',
-  `descripcion` text NOT NULL,
-  `categoria` varchar(100),
-  `compatibilidad` text,
-  `idBicicleta` int,
-  `idMarca` int 
-);
-
-
-CREATE TABLE `imagen` (
-  `idImagen` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `idUsuario` int UNIQUE,
-  `idDocumento` int,
-  `idModelo` int,
-  `url` varchar(255)
-);
-
 CREATE TABLE `bicicleta` (
   `idBicicleta` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `tipoBicicleta` varchar(45),
@@ -67,13 +47,28 @@ CREATE TABLE `bicicleta` (
   `manubrio` varchar(45),
   `pesoBicicleta` float,
   `pesoMaximo` float,
-  `extras` text,
-  `tarjeta` varchar(255)
+  `extras` text
 );
 
 CREATE TABLE `marca` (
   `idMarca` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(45) NOT NULL
+  `nombre` varchar(45) NOT NULL,
+  INDEX `nombre` (`nombre`)
+);
+
+CREATE TABLE `modelo` (
+  `idModelo` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(255) NOT NULL,
+  `tipo` ENUM ('bicicleta', 'componente', 'accesorio', 'otro') NOT NULL DEFAULT 'bicicleta',
+  `descripcion` text NOT NULL,
+  `categoria` varchar(100),
+  `compatibilidad` text,
+  `idBicicleta` int,
+  `idMarca` int,
+  FOREIGN KEY (`idBicicleta`) REFERENCES `bicicleta` (`idBicicleta`),
+  FOREIGN KEY (`idMarca`) REFERENCES `marca` (`idMarca`),
+  INDEX `idMarca` (`idMarca`),
+  INDEX `nombre` (`nombre`)
 );
 
 CREATE TABLE `tienda` (
@@ -81,32 +76,9 @@ CREATE TABLE `tienda` (
   `idUsuarioAdministrador` int NOT NULL,
   `nombre` varchar(255),
   `descripcion` text,
-  `telefono` varchar(60)
-);
-
-CREATE TABLE `carrito` (
-  `idCarrito` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `idPreferenciaPago` varchar(100),
-  `idPago` varchar(100),
-  `idUsuario` int NOT NULL,
-  `cantidadProductos` int DEFAULT 0,
-  `precioTotal` float,
-  `fecha` datetime,
-  `estado` ENUM ('pendiente_pago', 'pendiente_envio', 'enviado', 'recibido', 'fallido') DEFAULT 'pendiente_pago',
-  `metodoPago` varchar(45),
-  `direccionEnvio` varchar(45),
-  `descuento` float
-);
-
-CREATE TABLE `carritoProducto` (
-  `idCarritoProducto` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
-  `idProducto` int NOT NULL,
-  `idCarrito` int NOT NULL,
-  `cantidad` int,
-  `precio_unitario` float,
-  `fecha` datetime DEFAULT (current_timestamp),
-  `direccion` text,
-  `estadoEnvio` varchar(45)
+  `telefono` varchar(60),
+  FOREIGN KEY (`idUsuarioAdministrador`) REFERENCES `usuario` (`idUsuario`),
+  INDEX `nombre` (`nombre`)
 );
 
 CREATE TABLE `documento` (
@@ -116,7 +88,10 @@ CREATE TABLE `documento` (
   `tipo` varchar(60),
   `descripcion` text,
   `estado` varchar(60),
-  `fechaCompra` date
+  `fechaCompra` date,
+  FOREIGN KEY (`idModelo`) REFERENCES `modelo` (`idModelo`),
+  FOREIGN KEY (`idUsuario`) REFERENCES `usuario` (`idUsuario`),
+  INDEX `idUsuario` (`idUsuario`)
 );
 
 CREATE TABLE `producto` (
@@ -124,7 +99,7 @@ CREATE TABLE `producto` (
   `idModelo` int NOT NULL,
   `idVendedor` int,
   `idTienda` int,
-  `exposicion`int DEFAULT 0, 
+  `exposicion` int DEFAULT 0,
   `precio` float,
   `precioCompleto` float,
   `cantidad` int DEFAULT 0,
@@ -134,7 +109,54 @@ CREATE TABLE `producto` (
   `disponibilidad` ENUM ('disponible', 'vendido', 'reservado') DEFAULT 'disponible',
   `costoEnvio` float NOT NULL DEFAULT 0,
   `retiroEnTienda` bool NOT NULL DEFAULT false,
-  `fechaPublicacion` datetime DEFAULT (current_timestamp)
+  `fechaPublicacion` datetime DEFAULT (current_timestamp),
+  FOREIGN KEY (`idModelo`) REFERENCES `modelo` (`idModelo`),
+  FOREIGN KEY (`idVendedor`) REFERENCES `usuario` (`idUsuario`),
+  FOREIGN KEY (`idTienda`) REFERENCES `tienda` (`idTienda`)
+);  
+
+CREATE TABLE `imagen` (
+  `idImagen` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `idUsuario` int UNIQUE,
+  `idDocumento` int,
+  `idModelo` int,
+  `url` varchar(255),
+  FOREIGN KEY (`idUsuario`) REFERENCES `usuario` (`idUsuario`),
+  FOREIGN KEY (`idDocumento`) REFERENCES `documento` (`idDocumento`),
+  FOREIGN KEY (`idModelo`) REFERENCES `modelo` (`idModelo`),
+  INDEX `imagen_modelo` (`idModelo`),
+  INDEX `imagen_documento` (`idDocumento`),
+  INDEX `imagen_usuario` (`idUsuario`)
+);
+
+CREATE TABLE `carrito` (
+  `idCarrito` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `idPreferencia` varchar(255) UNIQUE,
+  `idPago` varchar(255) UNIQUE,
+  `idVendedor` int NOT NULL,
+  `idComprador` int NOT NULL,
+  `estado` ENUM('pendiente_pago', 'pendiente_envio', 'enviado', 'recibido', 'fallido', 'reembolsado') DEFAULT 'pendiente_pago',
+  `metodoPago` varchar(45),
+  `precioTotal` float,
+  `fecha` datetime DEFAULT (current_timestamp),
+  `direccionEnvio` varchar(255),
+  FOREIGN KEY (`idVendedor`) REFERENCES `usuario`(`idUsuario`),
+  FOREIGN KEY (`idComprador`) REFERENCES `usuario`(`idUsuario`),
+  INDEX (`idPreferencia`)
+);
+
+CREATE TABLE `carritoProducto` (
+  `idCarritoProducto` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `idCarrito` int NOT NULL,
+  `idPago` varchar(255),
+  `idPreferencia` varchar(255),
+  `idProducto` int NOT NULL,
+  `cantidad` int DEFAULT 1,
+  `fecha` datetime DEFAULT (current_timestamp),
+  FOREIGN KEY (`idCarrito`) REFERENCES `carrito` (`idCarrito`),
+  FOREIGN KEY (`idPago`) REFERENCES `carrito` (`idPago`),
+  FOREIGN KEY (`idPreferencia`) REFERENCES `carrito` (`idPreferencia`),
+  FOREIGN KEY (`idProducto`) REFERENCES `producto` (`idProducto`)
 );
 
 CREATE TABLE `pregunta` (
@@ -142,7 +164,11 @@ CREATE TABLE `pregunta` (
   `idProducto` int NOT NULL,
   `idUsuario` int NOT NULL,
   `descripcion` varchar(255) NOT NULL,
-  `respuesta` varchar(255)
+  `respuesta` varchar(255),
+  FOREIGN KEY (`idProducto`) REFERENCES `producto` (`idProducto`),
+  FOREIGN KEY (`idUsuario`) REFERENCES `usuario` (`idUsuario`),
+  INDEX `idProducto` (`idProducto`),
+  INDEX `idUsuario` (`idUsuario`)
 );
 
 CREATE TABLE `calificacion` (
@@ -154,7 +180,13 @@ CREATE TABLE `calificacion` (
   `foto` varchar(255),
   `comentario` text,
   `nota` int,
-  `fecha` datetime DEFAULT (current_timestamp)
+  `fecha` datetime DEFAULT (current_timestamp),
+  FOREIGN KEY (`idUsuarioComprador`) REFERENCES `usuario` (`idUsuario`),
+  FOREIGN KEY (`idUsuarioVendedor`) REFERENCES `usuario` (`idUsuario`),
+  FOREIGN KEY (`idProducto`) REFERENCES `producto` (`idProducto`),
+  FOREIGN KEY (`idTienda`) REFERENCES `tienda` (`idTienda`),
+  INDEX `idUsuarioComprador` (`idUsuarioComprador`),
+  INDEX `fk_calificacion_usuario1_idx` (`idUsuarioVendedor`)
 );
 
 CREATE TABLE `mensaje` (
@@ -163,86 +195,13 @@ CREATE TABLE `mensaje` (
   `idUsuarioReceptor` int NOT NULL,
   `idCarritoProducto` int NOT NULL,
   `contenido` text,
-  `fecha` datetime
+  `fecha` datetime,
+  FOREIGN KEY (`idUsuarioEmisor`) REFERENCES `usuario` (`idUsuario`),
+  FOREIGN KEY (`idUsuarioReceptor`) REFERENCES `usuario` (`idUsuario`),
+  FOREIGN KEY (`idCarritoProducto`) REFERENCES `carritoProducto` (`idCarritoProducto`),
+  INDEX `idUsuarioEmisor` (`idUsuarioEmisor`),
+  INDEX `fk_mensaje_usuario1_idx` (`idUsuarioReceptor`)
 );
-
-CREATE INDEX `idMarca` ON `modelo` (`idMarca`);
-
-CREATE INDEX `nombre` ON `modelo` (`nombre`);
-
-CREATE INDEX `imagen_modelo` ON `imagen` (`idModelo`);
-
-CREATE INDEX `imagen_documento` ON `imagen` (`idDocumento`);
-
-CREATE INDEX `imagen_usuario` ON `imagen` (`idUsuario`);
-
-CREATE INDEX `nombre` ON `marca` (`nombre`);
-
-CREATE INDEX `nombre` ON `tienda` (`nombre`);
-
-CREATE INDEX `idUsuario` ON `carrito` (`idUsuario`);
-
-CREATE INDEX `idUsuario` ON `documento` (`idUsuario`);
-
-CREATE INDEX `idProducto` ON `pregunta` (`idProducto`);
-
-CREATE INDEX `idUsuario` ON `pregunta` (`idUsuario`);
-
-CREATE INDEX `idUsuarioComprador` ON `calificacion` (`idUsuarioComprador`);
-
-CREATE INDEX `fk_calificacion_usuario1_idx` ON `calificacion` (`idUsuarioVendedor`);
-
-CREATE INDEX `idUsuarioEmisor` ON `mensaje` (`idUsuarioEmisor`);
-
-CREATE INDEX `fk_mensaje_usuario1_idx` ON `mensaje` (`idUsuarioReceptor`);
-
-ALTER TABLE `modelo` ADD FOREIGN KEY (`idBicicleta`) REFERENCES `bicicleta` (`idBicicleta`);
-
-ALTER TABLE `modelo` ADD FOREIGN KEY (`idMarca`) REFERENCES `marca` (`idMarca`);
-
-ALTER TABLE `imagen` ADD FOREIGN KEY (`idUsuario`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `imagen` ADD FOREIGN KEY (`idDocumento`) REFERENCES `documento` (`idDocumento`);
-
-ALTER TABLE `imagen` ADD FOREIGN KEY (`idModelo`) REFERENCES `modelo` (`idModelo`);
-
-ALTER TABLE `bicicleta` ADD FOREIGN KEY (`idBicicleta`) REFERENCES `modelo` (`idModelo`);
-
-ALTER TABLE `tienda` ADD FOREIGN KEY (`idUsuarioAdministrador`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `carrito` ADD FOREIGN KEY (`idUsuario`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `carritoProducto` ADD FOREIGN KEY (`idProducto`) REFERENCES `producto` (`idProducto`);
-
-ALTER TABLE `carritoProducto` ADD FOREIGN KEY (`idCarrito`) REFERENCES `carrito` (`idCarrito`);
-
-ALTER TABLE `documento` ADD FOREIGN KEY (`idModelo`) REFERENCES `modelo` (`idModelo`);
-
-ALTER TABLE `documento` ADD FOREIGN KEY (`idUsuario`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `producto` ADD FOREIGN KEY (`idModelo`) REFERENCES `modelo` (`idModelo`);
-
-ALTER TABLE `producto` ADD FOREIGN KEY (`idVendedor`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `producto` ADD FOREIGN KEY (`idTienda`) REFERENCES `tienda` (`idTienda`);
-
-ALTER TABLE `calificacion` ADD FOREIGN KEY (`idUsuarioComprador`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `calificacion` ADD FOREIGN KEY (`idUsuarioVendedor`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `calificacion` ADD FOREIGN KEY (`idProducto`) REFERENCES `producto` (`idProducto`);
-
-ALTER TABLE `calificacion` ADD FOREIGN KEY (`idTienda`) REFERENCES `tienda` (`idTienda`);
-
-ALTER TABLE `mensaje` ADD FOREIGN KEY (`idUsuarioEmisor`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `mensaje` ADD FOREIGN KEY (`idUsuarioReceptor`) REFERENCES `usuario` (`idUsuario`);
-
-ALTER TABLE `mensaje` ADD FOREIGN KEY (`idCarritoProducto`) REFERENCES `carritoProducto` (`idCarritoProducto`);
-
-ALTER TABLE `pregunta` ADD FOREIGN KEY (`idProducto`) REFERENCES `producto`(`idProducto`);
-
-ALTER TABLE `pregunta` ADD FOREIGN KEY (`idUsuario`) REFERENCES `usuario`(`idUsuario`);
 
 ------------------------------------------------------------
 -- Inserts
@@ -250,12 +209,13 @@ ALTER TABLE `pregunta` ADD FOREIGN KEY (`idUsuario`) REFERENCES `usuario`(`idUsu
 -- Insertar usuarios de muestra
 INSERT INTO `usuario` (`nombre`, `apellido`, `fechaNacimiento`, `rol`, `correo`, `direccionNombre`,`telefono`, `username`, `password`)
 VALUES 
+('Juan', 'Perez', '1985-05-15', 'comprador', 'juan.perez@ejemplo.com', 'Calle 123, Bogotá', '3001234567', 'juanp', '$2b$10$TbLwUaHLc9Pw6hEa8ZqojOgfzzEVjNuGOGLBezxVWTdU7W0r4weE.'),
+('Maria', 'Gomez', '1990-08-22', 'vendedor', 'maria.gomez@ejemplo.com', 'Carrera 45, Medellín', '3107654321', 'mariag', '$2b$10$TbLwUaHLc9Pw6hEa8ZqojOgfzzEVjNuGOGLBezxVWTdU7W0r4weE.'),
+('Carlos', 'Lopez', '1978-11-30', 'administrador', 'carlos.lopez@ejemplo.com', 'Avenida 10, Cali', '3209876543', 'carlosl', '$2b$10$TbLwUaHLc9Pw6hEa8ZqojOgfzzEVjNuGOGLBezxVWTdU7W0r4weE.');
 
-('Juan', 'Perez', '1985-05-15', 'comprador', 'juan.perez@ejemplo.com', 'Calle 123, Bogotá', '3001234567', 'juanp', 'contrasena123'),
-('Maria', 'Gomez', '1990-08-22', 'vendedor', 'maria.gomez@ejemplo.com', 'Carrera 45, Medellín', '3107654321', 'mariag', 'contrasena123'),
-('Carlos', 'Lopez', '1978-11-30', 'administrador', 'carlos.lopez@ejemplo.com', 'Avenida 10, Cali', '3209876543', 'carlosl', 'contrasena123');
-('Carlos', 'Ramírez', '2003-07-15','comprador', 'cadavid4003@gmail.com', NULL, NULL, NULL, '$2b$10$TbLwUaHLc9Pw6hEa8ZqojOgfzzEVjNuGOGLBezxVWTdU7W0r4weE.');
-
+INSERT INTO `usuario` VALUES
+('4', 'Ronald', 'Ramírez', '2003-07-15', 'vendedor', 'vendedor@gmail.com', '110881', 'Calle 324', '48-50 Sur', '', '', 'Bogota', NULL, NULL, '$2b$10$TbLwUaHLc9Pw6hEa8ZqojOgfzzEVjNuGOGLBezxVWTdU7W0r4weE.', '0', '2025-03-01 14:51:26', '1025146485', 'TEST-7255018865819969-030116-23eb1d70ba61f02f9cee879c5752771d-1025146485', 'TG-67c367cb78aa6200011e1699-1025146485', 'TEST-46820db6-ac0c-42bd-9eac-b09db1a04d81'),
+('5', 'Johan', 'Madrid', NULL, 'comprador', 'comprador@gmail.com', '110881', 'Calle 324', '48-50 Sur', '', '', 'Bogota', NULL, NULL, '$2b$10$TbLwUaHLc9Pw6hEa8ZqojOgfzzEVjNuGOGLBezxVWTdU7W0r4weE.', '0', '2025-03-01 15:13:31', NULL, NULL, NULL, NULL);
 
 -- Insertar marcas de muestra
 INSERT INTO `marca` (`nombre`)
@@ -308,34 +268,48 @@ INSERT INTO `tienda` (`idUsuarioAdministrador`, `nombre`, `descripcion`, `telefo
 VALUES 
 (3, 'Tienda de Bicis Bogotá', 'La mejor tienda de bicicletas en Bogotá', '3001234567');
 
--- Insertar carritos de muestra
-INSERT INTO `carrito` (`idUsuario`, `cantidadProductos`, `precioTotal`, `fecha`, `estado`, `metodoPago`, `direccionEnvio`, `descuento`)
-VALUES 
-(1, 2, 1500.00, NOW(), 'enviado', 'Tarjeta de Crédito', 'Calle 123, Bogotá', 0),
-(2, 1, 800.00, NOW(), 'enviado', 'PayPal', 'Carrera 45, Medellín', 0),
-(3, 2, 1500.00, NOW(), 'enviado', 'Tarjeta de Crédito', 'Calle 123, Bogotá', 0);
-
 -- Insertar productos de muestra
 INSERT INTO `producto` (`idModelo`, `idVendedor`, `idTienda`, `precio`, `precioCompleto`, `cantidad`,`ventas`, `estado`, `disponibilidad`, `costoEnvio`, `retiroEnTienda`)
 VALUES 
-(1, 1, null, 3000000, 3300000, 10,0, 'nuevo', 'disponible', 50.00, false),
-(2, 2, null, 2400000, 3000000, 5,2, 'nuevo', 'disponible', 0, false),
-(3, 3, null, 11000000, null, 3,10, 'nuevo', 'disponible', 50.00, false),
-(4, 1, null, 290000, 300000, 20,4, 'nuevo', 'disponible', 0, false),
-(5, 2, null, 120000, null, 15,0, 'nuevo', 'disponible', 0, false),
-(6, 3, null, 1500000, null, 5,0, 'nuevo', 'disponible', 0, false),
-(7, 1, null, 300000, null, 10,0, 'nuevo', 'disponible', 0, false),
-(8, 2, null, 460000, 500000, 5,0, 'nuevo', 'disponible', 0, false),
-(9, 3, null, 60000, null, 3,0, 'nuevo', 'disponible', 0, false),
-(10, 1, null, 5000, null, 15,9, 'nuevo', 'disponible', 0, false),
-(11, 1, null, 10000, 20000, 10,6, 'nuevo', 'disponible', 0, false);
+(1, 4, null, 3000000, 3300000, 10,0, 'nuevo', 'disponible', 50.00, false),
+(2, 4, null, 2400000, 3000000, 5,2, 'nuevo', 'disponible', 0, false),
+(3, 4, null, 11000000, null, 3,10, 'nuevo', 'disponible', 50.00, false),
+(4, 4, null, 290000, 300000, 20,4, 'nuevo', 'disponible', 0, false),
+(5, 4, null, 120000, null, 15,0, 'nuevo', 'disponible', 0, false),
+(6, 4, null, 1500000, null, 5,0, 'nuevo', 'disponible', 0, false),
+(7, 4, null, 300000, null, 10,0, 'nuevo', 'disponible', 0, false),
+(8, 4, null, 460000, 500000, 5,0, 'nuevo', 'disponible', 0, false),
+(9, 4, null, 60000, null, 3,0, 'nuevo', 'disponible', 0, false),
+(10, 4, null, 5000, null, 15,9, 'nuevo', 'disponible', 0, false),
+(11, 4, null, 10000, 20000, 10,6, 'nuevo', 'disponible', 0, false);
+
+-- Insertar pagos de muestra
+INSERT INTO `carrito` (`idPreferencia`, `idPago`, `idVendedor`, `idComprador`, `estado`, `metodoPago`, `precioTotal`, `fecha`, `direccionEnvio`)
+VALUES 
+(1, 1, 2, 1, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá'),
+(2, 2, 2, 2, 'pendiente_pago', 'PayPal', 800.00, NOW(), 'Carrera 45, Medellín'),
+(3, 3, 2, 3, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá'),
+(4, 4, 2, 1, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá'),
+(5, 5, 2, 2, 'pendiente_pago', 'PayPal', 800.00, NOW(), 'Carrera 45, Medellín'),
+(6, 6, 2, 3, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá'),
+(7, 7, 2, 1, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá'),
+(8, 8, 2, 2, 'pendiente_pago', 'PayPal', 800.00, NOW(), 'Carrera 45, Medellín'),
+(9, 9, 2, 3, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá'),
+(10, 10, 2, 1, 'pendiente_pago', 'Tarjeta de Crédito', 1500.00, NOW(), 'Calle 123, Bogotá');
 
 -- Insertar productos del carrito de muestra
-INSERT INTO `carritoProducto` (`idProducto`, `idCarrito`, `cantidad`, `precio_unitario`, `direccion`, `estadoEnvio`)
+INSERT INTO `carritoProducto` (`idCarrito`,`idPago`, `idProducto`, `idPreferencia`, `cantidad`, `fecha`)
 VALUES 
-(1, 3, 1, 750.00, 'Calle 123, Bogotá', 'Pendiente'),
-(2, 2, 1, 750.00, 'Calle 123, Bogotá', 'Pendiente'),
-(3, 2, 1, 800.00, 'Carrera 45, Medellín', 'Pendiente');
+(1, 1, 1, 1, 2, NOW()),
+(1, 2, 2, 2, 1, NOW()),
+(1, 3, 3, 3, 1, NOW()),
+(1, 4, 4, 4, 3, NOW()),
+(1, 5, 5, 5, 2, NOW()),
+(1, 6, 6, 6, 1, NOW()),
+(1, 7, 7, 7, 2, NOW()),
+(1, 8, 8, 8, 1, NOW()),
+(1, 9, 9, 9, 1, NOW()),
+(1, 10, 10, 10, 3, NOW());
 
 -- Insertar calificaciones de muestra
 INSERT INTO `calificacion` (`idUsuarioComprador`, `idUsuarioVendedor`, `idProducto`, `idTienda`, `foto`, `comentario`, `nota`)
@@ -373,30 +347,30 @@ SELECT
     usuario.correo,
     carrito.idCarrito,
     carrito.fecha,
-    carrito.estado,
     carrito.precioTotal,
-    carrito.metodoPago,
-    carrito.direccionEnvio,
     carritoProducto.idCarritoProducto,
     carritoProducto.idProducto,
     carritoProducto.cantidad,
-    carritoProducto.precio_unitario,
+    carritoProducto.idPago,
+    carritoProducto.idPreferencia,
     producto.idModelo,
     producto.costoEnvio,
     modelo.nombre
 FROM 
     carrito
 JOIN 
-    usuario ON carrito.idUsuario = usuario.idUsuario
+    usuario ON carrito.idComprador = usuario.idUsuario
 JOIN 
-    carritoProducto ON carrito.idCarrito = carritoProducto.idCarrito
+    carritoProducto ON carritoProducto.idPago = carrito.idPago
 JOIN 
-	producto ON producto.idProducto = carritoProducto.idProducto
+    producto ON producto.idProducto = carritoProducto.idProducto
 JOIN 
-	modelo ON modelo.idModelo = producto.idModelo
+    modelo ON modelo.idModelo = producto.idModelo
+WHERE  
+    carrito.estado = 'pendiente_pago'
 ORDER BY 
     carrito.fecha DESC;
-    
+
 
 -- Crear la vista consolidada
 DROP VIEW IF EXISTS vista_completa_producto;
@@ -498,8 +472,6 @@ RIGHT JOIN
 ORDER BY 
     producto.ventas DESC;
 
-select * from vista_completa_producto;
-
 DROP VIEW IF EXISTS vista_producto_calificacion_promedio;
 CREATE VIEW vista_producto_calificacion_promedio AS
 SELECT 
@@ -559,63 +531,57 @@ SELECT
     usuario.nombre,
     usuario.correo,
     carrito.idCarrito,
-    carrito.idPreferenciaPago,
     carrito.fecha,
     carrito.precioTotal,
-    carrito.metodoPago,
-    carrito.direccionEnvio,
     carritoProducto.idCarritoProducto,
     carritoProducto.idProducto,
     carritoProducto.cantidad,
-    carritoProducto.precio_unitario
+    carritoProducto.idPago,
+    carritoProducto.idPreferencia,
+    carrito.estado AS estadoCarrito,
+    carrito.metodoPago,
+    carrito.precioTotal AS precioCarrito,
+    carrito.direccionEnvio
 FROM 
-    carrito
+    usuario
 JOIN 
-    usuario ON carrito.idUsuario = usuario.idUsuario
+    carrito ON usuario.idUsuario = carrito.idVendedor
 JOIN 
-    carritoProducto ON carrito.idCarrito = carritoProducto.idCarrito
+    carritoProducto ON carrito.idPago = carritoProducto.idPago
 WHERE 
-    carrito.estado != 'recibido'
+    carrito.estado = 'pendiente_pago'
 ORDER BY 
     carrito.fecha DESC;
-    
+
 DROP VIEW IF EXISTS vista_compras_usuario;
 CREATE VIEW vista_compras_usuario AS
 SELECT 
     usuario.idUsuario,
     usuario.nombre,
+    usuario.apellido,
     usuario.correo,
     carrito.idCarrito,
-    carrito.idPreferenciaPago,
     carrito.fecha,
-    carrito.estado,
     carrito.precioTotal,
-    carrito.metodoPago,
-    carrito.direccionEnvio,
     carritoProducto.idCarritoProducto,
     carritoProducto.idProducto,
     carritoProducto.cantidad,
-    carritoProducto.precio_unitario,
-    producto.idVendedor,
-    producto.precio,
-    producto.precioCompleto,
-    producto.cantidad AS cantidadProducto,
-    producto.ventas,
+    producto.precio AS precioProducto,
     producto.estado AS estadoProducto,
-    producto.disponibilidad,
-    producto.costoEnvio,
-    producto.retiroEnTienda,
-    producto.fechaPublicacion,
+    producto.disponibilidad AS disponibilidadProducto,
     modelo.nombre AS nombreModelo,
     modelo.tipo AS tipoModelo,
     modelo.descripcion AS descripcionModelo,
-    modelo.categoria AS categoriaModelo,
-    modelo.compatibilidad AS compatibilidadModelo,
-    marca.nombre AS nombreMarca
+    marca.nombre AS nombreMarca,
+    imagen.url AS imagenModelo,
+    carrito.estado AS estadoCarrito,
+    carrito.metodoPago,
+    carrito.precioTotal AS precioCarrito,
+    carrito.direccionEnvio
 FROM 
-    carrito
+    usuario
 JOIN 
-    usuario ON carrito.idUsuario = usuario.idUsuario
+    carrito ON usuario.idUsuario = carrito.idComprador
 JOIN 
     carritoProducto ON carrito.idCarrito = carritoProducto.idCarrito
 JOIN 
@@ -624,6 +590,8 @@ JOIN
     modelo ON producto.idModelo = modelo.idModelo
 LEFT JOIN 
     marca ON modelo.idMarca = marca.idMarca
+LEFT JOIN 
+    imagen ON modelo.idModelo = imagen.idModelo
 ORDER BY 
     carrito.fecha DESC;
 
@@ -631,13 +599,11 @@ DROP VIEW IF EXISTS vista_ventas_usuario;
 CREATE VIEW vista_ventas_usuario AS
 SELECT 
     carrito.idCarrito,
-	carrito.idPreferenciaPago,
     carrito.fecha,
     carrito.precioTotal,
-    carrito.metodoPago,
-    carrito.direccionEnvio,
     carritoProducto.idProducto,
-    carritoProducto.precio_unitario,
+    carritoProducto.idPago,
+    carritoProducto.idPreferencia,
     producto.idVendedor,
     usuario.nombre AS nombreVendedor,
     usuario.apellido AS apellidoVendedor,
@@ -645,13 +611,11 @@ SELECT
 FROM 
     carrito
 JOIN 
-    carritoProducto ON carrito.idCarrito = carritoProducto.idCarrito
+    carritoProducto ON carrito.idPago = carritoProducto.idPago
 JOIN 
     producto ON carritoProducto.idProducto = producto.idProducto
 JOIN 
     usuario ON producto.idVendedor = usuario.idUsuario
-WHERE 
-    carrito.estado = 'recibido'
 ORDER BY 
     carrito.fecha DESC;
 
@@ -687,7 +651,55 @@ LEFT JOIN
     imagen iv ON iv.idUsuario = u.idUsuario
 LEFT JOIN 
     imagen ic ON ic.idUsuario = c.idUsuarioComprador;
-=======
+
+-- Vista de productos asociados a un carrito
+DROP VIEW IF EXISTS vista_productos_carrito;
+CREATE VIEW vista_productos_carrito AS
+SELECT 
+    carrito.idCarrito,
+    carrito.idComprador,
+    producto.idVendedor,
+    carrito.estado,
+    carrito.fecha,
+    carrito.precioTotal,
+    carritoProducto.idCarritoProducto,
+    carritoProducto.idProducto,
+    carritoProducto.cantidad,
+    producto.idModelo,
+    producto.precio,
+    producto.precioCompleto,
+    producto.cantidad AS cantidadProducto,
+    producto.ventas,
+    producto.estado AS estadoProducto,
+    producto.disponibilidad,
+    producto.costoEnvio,
+    producto.retiroEnTienda,
+    producto.fechaPublicacion,
+    modelo.nombre AS nombreModelo,
+    modelo.tipo AS tipoModelo,
+    modelo.descripcion AS descripcionModelo,
+    modelo.categoria AS categoriaModelo,
+    modelo.compatibilidad AS compatibilidadModelo,
+    marca.nombre AS nombreMarca,
+    imagen.url AS imagenModelo
+FROM 
+    carrito
+JOIN 
+    carritoProducto ON carrito.idCarrito = carritoProducto.idCarrito
+JOIN 
+    producto ON carritoProducto.idProducto = producto.idProducto
+JOIN 
+    modelo ON producto.idModelo = modelo.idModelo
+LEFT JOIN 
+    marca ON modelo.idMarca = marca.idMarca
+LEFT JOIN 
+    imagen ON modelo.idModelo = imagen.idModelo
+WHERE
+    carrito.estado = 'pendiente_pago'
+ORDER BY 
+    carrito.fecha DESC;
+
+
 ------------------------------------------------
 -- Procedimientos almacenados
 ------------------------------------------------

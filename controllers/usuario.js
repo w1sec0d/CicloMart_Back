@@ -1,24 +1,27 @@
 const bcrypt = require('bcrypt')
 const db = require('../database/connection')
 
-// Obtiene todos los usuarios
-const getUsuarios = (request, response) => {
-  try {
-    db.query('SELECT * FROM usuario', (error, results) => {
+// Helper function to execute a query and return a promise
+const executeQuery = (query, params) => {
+  return new Promise((resolve, reject) => {
+    db.query(query, params, (error, results) => {
       if (error) {
-        console.error('Error ejecutando la consulta', error)
-        return response.status(500).json({
-          success: false,
-          message: 'Error interno del servidor',
-          error: error.message,
-        })
+        reject(error)
+      } else {
+        resolve(results)
       }
+    })
+  })
+}
 
-      return response.status(200).json({
-        success: true,
-        message: 'Usuarios obtenidos exitosamente',
-        results,
-      })
+// Obtiene todos los usuarios
+const getUsuarios = async (request, response) => {
+  try {
+    const results = await executeQuery('SELECT * FROM usuario', [])
+    return response.status(200).json({
+      success: true,
+      message: 'Usuarios obtenidos exitosamente',
+      results,
     })
   } catch (error) {
     console.error('Error en el servidor', error)
@@ -31,7 +34,7 @@ const getUsuarios = (request, response) => {
 }
 
 // Obtiene un usuario por su ID
-const getUsuarioById = (request, response) => {
+const getUsuarioById = async (request, response) => {
   try {
     const id = parseInt(request.params.id)
 
@@ -42,25 +45,12 @@ const getUsuarioById = (request, response) => {
       })
     }
 
-    db.query(
-      'SELECT * FROM usuario WHERE idUsuario = ?',
-      [id],
-      (error, results) => {
-        if (error) {
-          console.error('Error ejecutando la consulta', error)
-          return response.status(500).json({
-            success: false,
-            message: 'Error interno del servidor',
-            error: error.message,
-          })
-        }
-        return response.status(200).json({
-          success: true,
-          message: 'Usuario obtenido exitosamente',
-          results,
-        })
-      }
-    )
+    const results = await executeQuery('SELECT * FROM usuario WHERE idUsuario = ?', [id])
+    return response.status(200).json({
+      success: true,
+      message: 'Usuario obtenido exitosamente',
+      results,
+    })
   } catch (error) {
     console.error('Error en el servidor', error)
     return response.status(500).json({
@@ -71,7 +61,7 @@ const getUsuarioById = (request, response) => {
   }
 }
 
-const getUsuarioPhoto = (request, response) => {
+const getUsuarioPhoto = async (request, response) => {
   try {
     const idUser = parseInt(request.params.id)
 
@@ -83,29 +73,19 @@ const getUsuarioPhoto = (request, response) => {
     }
 
     const query = 'SELECT url FROM imagen WHERE idUsuario = ?'
+    const results = await executeQuery(query, [idUser])
 
-    db.query(query, [idUser], (error, results) => {
-      if (error) {
-        console.error('Error ejecutando la consulta', error)
-        return response.status(500).json({
-          success: false,
-          message: 'Error interno del servidor',
-          error: error.message,
-        })
-      }
-
-      if (results.length === 0) {
-        return response.status(404).json({
-          success: false,
-          message: 'Foto no encontrada para el usuario especificado',
-        })
-      }
-
-      return response.status(200).json({
-        success: true,
-        message: 'Foto del usuario obtenida exitosamente',
-        photoUrl: results[0].url,
+    if (results.length === 0) {
+      return response.status(404).json({
+        success: false,
+        message: 'Foto no encontrada para el usuario especificado',
       })
+    }
+
+    return response.status(200).json({
+      success: true,
+      message: 'Foto del usuario obtenida exitosamente',
+      photoUrl: results[0].url,
     })
   } catch (error) {
     console.error('Error en el servidor', error)
@@ -131,41 +111,18 @@ const registerUsuario = async (request, response) => {
 
     const passwordHash = await bcrypt.hash(password, 10)
 
-    db.query(
-      'INSERT INTO usuario (nombre, apellido, correo, password, fechaRegistro) VALUES (?, ?, ?, ?, ?)',
-      [nombre, apellido, email, passwordHash, new Date()],
-      (error, results) => {
-        if (error) {
-          console.error('Error ejecutando la consulta', error)
-          return response.status(500).json({
-            success: false,
-            message: 'Error en el servidor, intentalo más tarde',
-            error: error.message,
-          })
-        }
+    const insertUsuarioQuery = 'INSERT INTO usuario (nombre, apellido, correo, password, fechaRegistro) VALUES (?, ?, ?, ?, ?)'
+    const usuarioResults = await executeQuery(insertUsuarioQuery, [nombre, apellido, email, passwordHash, new Date()])
 
-        const idUsuario = results.insertId
+    const idUsuario = usuarioResults.insertId
 
-        db.query(
-          'INSERT INTO carrito (idUsuario) VALUES (?)',
-          [idUsuario],
-          (error, results) => {
-            if (error) {
-              console.error('Error ejecutando la consulta', error)
-              return response.status(500).json({
-                success: false,
-                message: 'Error en el servidor, intentalo más tarde',
-                error: error.message,
-              })
-            }
-            return response.status(201).json({
-              success: true,
-              message: 'Usuario añadido satisfactoriamente',
-            })
-          }
-        )
-      }
-    )
+    return response.status(201).json({
+      success: true,
+      message: 'Usuario añadido satisfactoriamente',
+      data: {
+        idUsuario,
+      },
+    })
   } catch (error) {
     console.error('Error en el servidor', error)
     return response.status(500).json({
@@ -177,7 +134,7 @@ const registerUsuario = async (request, response) => {
 }
 
 // Actualiza la foto de un usuario
-const updateUsuarioFoto = (request, response) => {
+const updateUsuarioFoto = async (request, response) => {
   try {
     const photoUrl = request.body.photoUrl
     const idUser = parseInt(request.params.idUsuario)
@@ -196,26 +153,16 @@ const updateUsuarioFoto = (request, response) => {
       })
     }
 
-    // Usar INSERT ... ON DUPLICATE KEY UPDATE para insertar o actualizar la URL de la foto
     const query = `
       INSERT INTO imagen (idUsuario, url) 
       VALUES (?, ?)
       ON DUPLICATE KEY UPDATE url = VALUES(url)
     `
+    await executeQuery(query, [idUser, photoUrl])
 
-    db.query(query, [idUser, photoUrl], (error, results) => {
-      if (error) {
-        console.error('Error ejecutando la consulta', error)
-        return response.status(500).json({
-          success: false,
-          message: 'Error interno del servidor',
-          error: error.message,
-        })
-      }
-      return response.status(200).json({
-        success: true,
-        message: 'Foto del usuario actualizada correctamente',
-      })
+    return response.status(200).json({
+      success: true,
+      message: 'Foto del usuario actualizada correctamente',
     })
   } catch (error) {
     console.error('Error en el servidor', error)
@@ -228,7 +175,7 @@ const updateUsuarioFoto = (request, response) => {
 }
 
 // Actualiza los datos de un usuario
-const updateUsuario = (request, response) => {
+const updateUsuario = async (request, response) => {
   try {
     const id = parseInt(request.params.id)
     const fields = request.body
@@ -274,26 +221,69 @@ const updateUsuario = (request, response) => {
 
     // Construir la consulta SQL dinámica
     const query = `UPDATE usuario SET ${updates.join(', ')} WHERE idUsuario = ?`
+    await executeQuery(query, values)
 
-    db.query(query, values, (error, results) => {
-      if (error) {
-        console.error('Error ejecutando la consulta', error)
-        return response.status(500).json({
-          success: false,
-          message: 'Error interno del servidor',
-          error: error.message,
-        })
-      }
-      return response.status(200).json({
-        success: true,
-        message: 'Usuario actualizado correctamente',
-      })
+    return response.status(200).json({
+      success: true,
+      message: 'Usuario actualizado correctamente',
     })
   } catch (error) {
     console.error('Error en el servidor', error)
     return response.status(500).json({
       success: false,
       message: 'Error interno del servidor',
+      error: error.message,
+    })
+  }
+}
+
+const updateUsuarioDireccion = async (req, res) => {
+  const {
+    direccionNombre,
+    direccionNumero,
+    codigoPostal,
+    direccionCiudad,
+    direccionApartamento,
+    direccionPiso,
+  } = req.body
+  const idUsuario = req.params.idUsuario
+
+  try {
+    const query = `
+      UPDATE usuario
+      SET direccionNombre = ?, direccionNumero = ?, codigoPostal = ?, direccionCiudad = ?, direccionApartamento = ?, direccionPiso = ?
+      WHERE idUsuario = ?
+    `
+    const values = [
+      direccionNombre,
+      direccionNumero,
+      codigoPostal,
+      direccionCiudad,
+      direccionApartamento,
+      direccionPiso,
+      idUsuario,
+    ]
+
+    const results = await executeQuery(query, values)
+
+    res.status(200).json({
+      success: true,
+      message: 'Dirección actualizada exitosamente',
+      data: {
+        direccionNombre,
+        direccionNumero,
+        codigoPostal,
+        direccionCiudad,
+        direccionApartamento,
+        direccionPiso,
+      },
+      results,
+    })
+  } catch (error) {
+    console.error('Error actualizando dirección:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Error actualizando dirección',
       error: error.message,
     })
   }
@@ -306,4 +296,5 @@ module.exports = {
   registerUsuario,
   updateUsuarioFoto,
   updateUsuario,
+  updateUsuarioDireccion,
 }

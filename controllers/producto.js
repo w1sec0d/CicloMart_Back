@@ -166,53 +166,85 @@ const getProductById = async (req, res) => {
 
 const createPreference = async (req, res) => {
   try {
-    const { producto, cantidad, idComprador } = req.body;
-
+    const { producto, cantidad, idComprador } = req.body
     // OBTENCION DE DATOS DE VENDEDOR Y COMPRADOR
 
     // Obtener información del vendedor
-    const vendedorQuery = 'SELECT * FROM usuario WHERE idUsuario = ?';
+    const vendedorQuery = 'SELECT * FROM usuario WHERE idUsuario = ?'
     const [vendedor] = await new Promise((resolve, reject) => {
       db.query(vendedorQuery, [producto.idVendedor], (error, results) => {
         if (error) {
-          console.error('Error obteniendo vendedor:', error);
+          console.error('Error obteniendo vendedor:', error)
           return reject({
             success: false,
             message: 'Error obteniendo vendedor',
             error: error.message,
-          });
+          })
         }
-        resolve(results);
-      });
-    });
+        resolve(results)
+      })
+    })
     if (!vendedor || vendedor.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Vendedor no encontrado',
-      });
+      })
     }
 
     // Obtener información del comprador
-    const compradorQuery = 'SELECT * FROM usuario WHERE idUsuario = ?';
+    const compradorQuery = 'SELECT * FROM usuario WHERE idUsuario = ?'
     const [comprador] = await new Promise((resolve, reject) => {
       db.query(compradorQuery, [idComprador], (error, results) => {
         if (error) {
-          console.error('Error obteniendo comprador:', error);
+          console.error('Error obteniendo comprador:', error)
           return reject({
             success: false,
             message: 'Error obteniendo comprador',
             error: error.message,
-          });
+          })
         }
-        resolve(results);
-      });
-    });
+        resolve(results)
+      })
+    })
     if (!comprador || comprador.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Comprador no encontrado',
-      });
+      })
     }
+
+    // REGISTRO DE PREFERENCIA DE MERCADOPAGO EN LA BASE DE DATOS
+
+    // Crear carrito
+    const carritoQuery = `
+      INSERT INTO carrito (idPreferencia, idPago, idVendedor, idComprador, estado, metodoPago, precioTotal, fecha, direccionEnvio)
+      VALUES (?, ?, ?, ?, 'pendiente_pago', ?, ?, NOW(), ?)
+    `
+    const carritoValues = [
+      null, // idPreferencia
+      null, // idPago
+      producto.idVendedor,
+      idComprador,
+      'MercadoPago',
+      producto.precio * cantidad,
+      'Direccion de envio',
+    ]
+
+    const carritoResults = await new Promise((resolve, reject) => {
+      db.query(carritoQuery, carritoValues, (error, results) => {
+        if (error) {
+          console.error('Error creando carrito:', error)
+          return reject({
+            success: false,
+            message: 'Error creando carrito',
+            error: error.message,
+          })
+        }
+        resolve(results)
+      })
+    })
+
+    const carritoId = carritoResults.insertId
 
     // CREACION DE PREFERENCIA DE MERCADOPAGO
 
@@ -220,15 +252,14 @@ const createPreference = async (req, res) => {
     const mercadoPagoClient = new MercadoPagoConfig({
       accessToken: vendedor.mp_access_token,
       options: {
-        idempotencyKey: Math.random().toString(36).substring(2) + Date.now().toString(36),
+        idempotencyKey:
+          Math.random().toString(36).substring(2) + Date.now().toString(36),
       },
-    });
-    const preference = new Preference(mercadoPagoClient);
+    })
+    const preference = new Preference(mercadoPagoClient)
 
     const freeShippingBody =
-      Number(producto.costoEnvio) === 0 ?
-        [{ id: 73328 }]
-        : [];
+      Number(producto.costoEnvio) === 0 ? [{ id: 73328 }] : []
 
     const preferenceBody = {
       items: [
@@ -251,34 +282,14 @@ const createPreference = async (req, res) => {
           area_code: '57',
           number: comprador.telefono,
         },
-        // identification: {
-        //   type: 'CC',
-        //   number: comprador.cedula,
-        // }
         address: {
           zip_code: comprador.codigoPostal,
           street_name: comprador.direccionNombre,
           street_number: comprador.direccionNumero,
-        }
+        },
       },
       payment_methods: {
         default_installments: 1,
-      },
-      shipments: {
-        mode: 'me2',
-        local_pickup: false,
-        dimensions: producto.dimensiones ?? '30x30x30,500',
-        free_methods: freeShippingBody,
-        cost: Number(producto.costoEnvio),
-        reciever_address: {
-          zip_code: comprador.codigoPostal ?? '1234',
-          street_name: comprador.direccionNombre ?? 'Calle Prueba',
-          street_number: comprador.direccionNumero ?? '48 #29-20 Sur',
-          floor: comprador.dirrecionPiso ?? '3',
-          apartment: comprador.direccionApartamento ?? 'C',
-          city_name: comprador.direccionCiudad ?? 'Bogotá',
-          country_name: 'Colombia',
-        },
       },
       back_urls: {
         success: process.env.FRONTEND_URL + '/requestResult/purchaseComplete',
@@ -290,83 +301,60 @@ const createPreference = async (req, res) => {
       auto_return: 'approved',
       external_reference: carritoId,
       marketplace_fee: calculateFee(producto.tipo, producto.precio),
-    };
+    }
 
-    const preferenceResult = await preference.create({ body: preferenceBody });
-    const idPreferenciaPago = preferenceResult.id;
+    console.log('preferenceBody', preferenceBody)
 
-    // REGISTRO DE PREFERENCIA DE MERCADOPAGO EN LA BASE DE DATOS
+    const preferenceResult = await preference.create({ body: preferenceBody })
+    const idPreferenciaPago = preferenceResult.id
 
-    // Crear carrito
-    const carritoQuery = `
-      INSERT INTO carrito (idUsuario, cantidadProductos, precioTotal, fecha, estado, metodoPago, direccionEnvio, descuento)
-      VALUES (?, ?, ?, NOW(), 'pendiente_pago', ?, ?, ?)
-    `;
-    const carritoValues = [
-      idComprador,
-      quantity,
-      unit_price * quantity,
-      'MercadoPago',
-      'Direccion de envio',
-      0,
-    ];
-
-    const carritoResults = await new Promise((resolve, reject) => {
-      db.query(carritoQuery, carritoValues, (error, results) => {
-        if (error) {
-          console.error('Error creando carrito:', error);
-          return reject({
-            success: false,
-            message: 'Error creando carrito',
-            error: error.message,
-          });
-        }
-        resolve(results);
-      });
-    });
-
-    const carritoId = carritoResults.insertId;
     // Actualizar carrito con el id de la preferencia
     await new Promise((resolve, reject) => {
-      db.query('UPDATE carrito SET idPreferenciaPago = ? WHERE idCarrito = ?', [idPreferenciaPago, carritoId], (error, results) => {
-        if (error) {
-          console.error('Error actualizando carrito:', error);
-          return reject({
-            success: false,
-            message: 'Error actualizando carrito',
-            error: error.message,
-          });
+      db.query(
+        'UPDATE carrito SET idPreferencia = ? WHERE idCarrito = ?',
+        [idPreferenciaPago, carritoId],
+        (error, results) => {
+          if (error) {
+            console.error('Error actualizando carrito:', error)
+            return reject({
+              success: false,
+              message: 'Error actualizando carrito',
+              error: error.message,
+            })
+          }
+          resolve(results)
         }
-        resolve(results);
-      });
-    });
+      )
+    })
 
     // Crear carritoProducto
     const carritoProductoQuery = `
-      INSERT INTO carritoProducto (idProducto, idCarrito, cantidad, precio_unitario, direccion, estadoEnvio)
-      VALUES (?, ?, ?, ?, ?, 'Pendiente')
-    `;
+      INSERT INTO carritoProducto (idCarrito, idProducto, cantidad)
+      VALUES (?, ?, ?)
+    `
     const carritoProductoValues = [
-      idProducto,
       carritoId,
-      quantity,
-      unit_price,
-      'Direccion de envio',
-    ];
+      producto.idProducto,
+      cantidad,
+    ]
 
     await new Promise((resolve, reject) => {
-      db.query(carritoProductoQuery, carritoProductoValues, (error, results) => {
-        if (error) {
-          console.error('Error creando carritoProducto:', error);
-          return reject({
-            success: false,
-            message: 'Error creando carritoProducto',
-            error: error.message,
-          });
+      db.query(
+        carritoProductoQuery,
+        carritoProductoValues,
+        (error, results) => {
+          if (error) {
+            console.error('Error creando carritoProducto:', error)
+            return reject({
+              success: false,
+              message: 'Error creando carritoProducto',
+              error: error.message,
+            })
+          }
+          resolve(results)
         }
-        resolve(results);
-      });
-    });
+      )
+    })
 
     return res.status(200).json({
       success: true,
@@ -374,16 +362,16 @@ const createPreference = async (req, res) => {
       preferenceId: preferenceResult.id,
       paymentURL: preferenceResult.init_point,
       preferenceResult,
-    });
+    })
   } catch (error) {
-    console.error('Error creando preferencia de MercadoPago:', error);
+    console.error('Error creando preferencia de MercadoPago:', error)
     res.status(500).json({
       success: false,
       message: 'Error creando preferencia de MercadoPago',
       error: error.message,
-    });
+    })
   }
-};
+}
 
 const publishProducto = async (req, res) => {
   const {
@@ -600,12 +588,10 @@ const getBrands = async (req, res) => {
   }
 }
 
-const uploadImage = async(req, res) => {
+const uploadImage = async (req, res) => {
   try {
-    
     const { idProducto, file } = req.body
     console.log(idProducto, file)
-
 
     if (!file) {
       return res.status(400).json({
@@ -618,10 +604,7 @@ const uploadImage = async(req, res) => {
       INSERT INTO imagen (idModelo, url)
       VALUES (?, ?)
     `
-    const imageValues = [
-      idProducto,
-      file,
-    ]
+    const imageValues = [idProducto, file]
 
     db.query(imageQuery, imageValues, (error, results) => {
       if (error) {
@@ -649,25 +632,29 @@ const uploadImage = async(req, res) => {
   }
 }
 
-const getImages = async(req, res) => {
+const getImages = async (req, res) => {
   try {
     const { idProducto } = req.params
-    db.query('SELECT * FROM imagen WHERE idModelo = ?', [idProducto], (error, results) => {
-      if (error) {
-        console.error('Error obteniendo imagenes:', error)
-        return res.status(500).json({
-          success: false,
-          message: 'Error obteniendo imagenes',
-          error: error.message,
+    db.query(
+      'SELECT * FROM imagen WHERE idModelo = ?',
+      [idProducto],
+      (error, results) => {
+        if (error) {
+          console.error('Error obteniendo imagenes:', error)
+          return res.status(500).json({
+            success: false,
+            message: 'Error obteniendo imagenes',
+            error: error.message,
+          })
+        }
+
+        res.status(200).json({
+          success: true,
+          message: 'Imagenes obtenidas exitosamente',
+          results,
         })
       }
-
-      res.status(200).json({
-        success: true,
-        message: 'Imagenes obtenidas exitosamente',
-        results,
-      })
-    })
+    )
   } catch (error) {
     console.error('Error obteniendo imagenes:', error)
     res.status(500).json({
@@ -689,5 +676,5 @@ module.exports = {
   getModels,
   getBrands,
   uploadImage,
-  getImages
+  getImages,
 }

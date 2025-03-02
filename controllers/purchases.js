@@ -116,7 +116,7 @@ const cancelPurchase = async (req, res) => {
     }
 
     // Actualiza el estado del carrito a fallido
-    await query('UPDATE carrito SET estado = "fallido" WHERE idCarrito = ?', [
+    await query('UPDATE carrito SET estado = "reembolsado" WHERE idCarrito = ?', [
       idCarrito,
     ])
     res.status(200).json({

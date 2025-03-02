@@ -1,10 +1,16 @@
 // Objetos de configuración de MercadoPago
-const { MercadoPagoConfig, Preference, PaymentRefund, OAuth } = require('mercadopago')
+const {
+  MercadoPagoConfig,
+  Preference,
+  PaymentRefund,
+  OAuth,
+} = require('mercadopago')
 
 const mercadoPagoClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
   options: {
-    idempotencyKey: Math.random().toString(36).substring(2) + Date.now().toString(36),
+    idempotencyKey:
+      Math.random().toString(36).substring(2) + Date.now().toString(36),
   },
 })
 

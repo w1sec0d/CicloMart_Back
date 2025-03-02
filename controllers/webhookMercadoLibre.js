@@ -29,7 +29,6 @@ const webhookMercadoLibre = async (req, res) => {
           }
         )
       }
-
     }
     res.status(200).json({ success: true, message: 'Webhook recibido', body })
   } catch (error) {
